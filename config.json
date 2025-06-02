@@ -1,0 +1,15 @@
+{
+    "login": {
+        "api_key": "E8lamuh3U2gYNHfEYI",
+        "api_secret": "B62luPjJ1VoyADWkY1R30cquT8jhTjBl19dq"
+    },
+
+        "testnet": {
+        "api_key": "PxytGqKUGsU2qepyTK",
+        "api_secret": "r0AKpMpot8xOMiwMUGkIV795q6dHut0uF12S"
+    },
+    "demologin": {
+        "api_key": "306V2hB0AaIS1M7XED",
+        "api_secret": "kMO6I0accnmjj3tPW360NjW9Cy9NHpDNsWAP"
+    }
+}
