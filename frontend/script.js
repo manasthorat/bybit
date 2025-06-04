@@ -1,3 +1,9 @@
+// Check for authentication token
+const token = localStorage.getItem('access_token');
+if (!token) {
+    window.location.href = '/login';
+}
+
 // API base URL
 const API_URL = '/api';
 
@@ -13,6 +19,39 @@ const historyBody = document.getElementById('historyBody');
 const cancelModal = document.getElementById('cancelModal');
 const confirmCancelBtn = document.getElementById('confirmCancel');
 const closeModalBtn = document.getElementById('closeModal');
+
+// Authenticated fetch wrapper
+async function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+
+    const authOptions = {
+        ...options,
+        headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        }
+    };
+
+    const response = await fetch(url, authOptions);
+    
+    if (response.status === 401) {
+        localStorage.removeItem('access_token');
+        window.location.href = '/login';
+        return;
+    }
+    
+    return response;
+}
+
+// Logout function
+function logout() {
+    localStorage.removeItem('access_token');
+    window.location.href = '/login';
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,7 +88,9 @@ function setupEventListeners() {
 // API Functions
 async function checkAccountStatus() {
     try {
-        const response = await fetch(`${API_URL}/account/status`);
+        const response = await fetchWithAuth(`${API_URL}/account/status`);
+        if (!response) return; // Handle auth redirect
+        
         const data = await response.json();
         
         if (data.connected) {
@@ -70,7 +111,9 @@ async function checkAccountStatus() {
 
 async function loadSettings() {
     try {
-        const response = await fetch(`${API_URL}/settings`);
+        const response = await fetchWithAuth(`${API_URL}/settings`);
+        if (!response) return; // Handle auth redirect
+        
         const data = await response.json();
         
         if (!data.error) {
@@ -87,13 +130,15 @@ async function saveSettings() {
             auto_trading_enabled: autoTradingToggle.checked
         };
         
-        const response = await fetch(`${API_URL}/settings`, {
+        const response = await fetchWithAuth(`${API_URL}/settings`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(settings)
         });
+        
+        if (!response) return; // Handle auth redirect
         
         const data = await response.json();
         if (data.success) {
@@ -109,7 +154,9 @@ async function saveSettings() {
 
 async function loadPositions() {
     try {
-        const response = await fetch(`${API_URL}/positions`);
+        const response = await fetchWithAuth(`${API_URL}/positions`);
+        if (!response) return; // Handle auth redirect
+        
         const positions = await response.json();
         updatePositionsTable(positions);
     } catch (error) {
@@ -149,7 +196,9 @@ function updatePositionsTable(positions) {
 
 async function loadTradeHistory() {
     try {
-        const response = await fetch(`${API_URL}/trades?limit=50`);
+        const response = await fetchWithAuth(`${API_URL}/trades?limit=50`);
+        if (!response) return; // Handle auth redirect
+        
         const trades = await response.json();
         
         if (trades.length === 0) {
@@ -199,13 +248,15 @@ async function confirmCancelOrder() {
     
     try {
         const { symbol, side, size } = currentPositionToClose;
-        const response = await fetch(`${API_URL}/positions/${symbol}/close`, {
+        const response = await fetchWithAuth(`${API_URL}/positions/${symbol}/close`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ side, size })
         });
+        
+        if (!response) return; // Handle auth redirect
         
         const data = await response.json();
         if (data.success) {

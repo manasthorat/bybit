@@ -9,7 +9,8 @@ import json
 import uvicorn
 from fastapi import Query
 from datetime import datetime
-
+from auth import create_access_token, get_current_user, AUTH_USERNAME, AUTH_PASSWORD
+from pydantic import BaseModel
 from database import init_db, get_db
 from models import (
     WebhookSignal, TradeResponse, SettingsUpdate, 
@@ -21,6 +22,14 @@ from config import config
 
 app = FastAPI(title="Trading System API")
 from pydantic import BaseModel
+
+
+
+# Add login model
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 
 # Add this class after your imports
 class ClosePositionRequest(BaseModel):
@@ -51,8 +60,28 @@ app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 # API Endpoints
 
+
+@app.post("/api/login")
+async def login(login_data: LoginRequest):
+    if login_data.username == AUTH_USERNAME and login_data.password == AUTH_PASSWORD:
+        access_token = create_access_token(login_data.username)
+        return {"access_token": access_token, "token_type": "bearer"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+
+# Serve login page
+@app.get("/login")
+async def login_page():
+    return FileResponse("../frontend/login.html")
+
+
+
 @app.get("/api/account/status", response_model=AccountStatus)
-async def get_account_status():
+async def get_account_status(current_user: str = Depends(get_current_user)):
+
     """Check if Bybit account is connected and get balance"""
     connection = bybit_client.check_connection()
     
