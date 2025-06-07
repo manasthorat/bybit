@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading System Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Trading System Dashboard</h1>
+            <div class="header-right">
+                <div class="toggle-container">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoTradingToggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span>Auto Trading</span>
+                </div>
+                <div class="account-status">
+                    <div class="status-indicator" id="connectionStatus"></div>
+                    <span id="accountInfo">Checking connection...</span>
+                </div>
+                    <button class="btn btn-secondary" onclick="logout()" style="margin-left: 20px;">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Open Positions -->
+            <section class="positions-section">
+                <h2>Open Positions</h2>
+                <div class="table-container">
+                    <table id="positionsTable">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th>Size</th>
+                                <th>Leverage</th>
+                                <th>Entry Price</th>
+                                <th>Current Price</th>
+                                <th>PnL</th>
+                                <th>PnL %</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positionsBody">
+                            <tr>
+                                <td colspan="9" class="empty-message">No open positions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Trade History -->
+            <section class="history-section">
+                <h2>Trade History</h2>
+                <div class="table-container">
+                    <table id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Symbol</th>
+                                <th>Side</th>
+                                <th>Quantity</th>
+                                <th>Entry Price</th>
+                                <th>Status</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody">
+                            <tr>
+                                <td colspan="7" class="empty-message">Loading trade history...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal for close confirmation -->
+    <div id="cancelModal" class="modal">
+        <div class="modal-content">
+            <h3>Close Position</h3>
+            <p>Are you sure you want to close this position?</p>
+            <div class="modal-buttons">
+                <button id="confirmCancel" class="btn btn-danger">Yes, Close Position</button>
+                <button id="closeModal" class="btn btn-secondary">No, Keep Position</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
