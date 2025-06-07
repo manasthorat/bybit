@@ -6,7 +6,7 @@ if (!token) {
 
 // API base URL
 const API_URL = '/api';
-
+//const API_URL = 'https://trading.theinvestmaster.in/api';
 // State
 let currentPositionToClose = null;
 

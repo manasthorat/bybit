@@ -1,0 +1,276 @@
+# Setting Up trading.theinvestmaster.in Subdomain
+
+## Step 1: Configure GoDaddy DNS for Subdomain
+
+### 1.1 Login to GoDaddy
+1. Go to your GoDaddy account
+2. Navigate to "My Products" → "Domains"
+3. Click "DNS" next to theinvestmaster.in
+
+### 1.2 Add A Record for Subdomain
+Add this DNS record:
+
+```
+Type    Name        Value               TTL
+A       trading     your-elastic-ip     600
+```
+
+**Example**: If your AWS Elastic IP is 52.66.123.456, then:
+```
+Type    Name        Value               TTL
+A       trading     52.66.123.456       600
+```
+
+**Note**: In the "Name" field, you only put "trading" (not the full domain)
+
+### 1.3 Wait for DNS Propagation
+- Usually takes 5-30 minutes
+- Can take up to 48 hours in rare cases
+- Test with: `nslookup trading.theinvestmaster.in`
+
+## Step 2: Update Nginx Configuration
+
+SSH into your EC2 instance and update the Nginx configuration:
+
+```bash
+sudo nano /etc/nginx/sites-available/trading-system
+```
+
+Replace the content with:
+
+```nginx
+server {
+    listen 80;
+    server_name trading.theinvestmaster.in;
+
+    # Redirect HTTP to HTTPS (will be added by certbot)
+    location / {
+        return 301 https://$server_name$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl; # Will be configured by certbot
+    server_name trading.theinvestmaster.in;
+
+    # SSL certificates will be added by certbot
+
+    # Serve frontend files
+    location / {
+        root /var/www/trading-system/frontend;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API requests
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Specific handling for webhook endpoint
+    location /api/webhook {
+        proxy_pass http://localhost:8000/api/webhook;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Important for webhook bodies
+        proxy_buffering off;
+        proxy_request_buffering off;
+        client_max_body_size 10M;
+    }
+
+    # Static files
+    location /static {
+        alias /var/www/trading-system/frontend;
+    }
+}
+```
+
+### 2.1 For Initial Setup (HTTP only first):
+Use this simplified version initially:
+
+```nginx
+server {
+    listen 80;
+    server_name trading.theinvestmaster.in;
+
+    # Serve frontend files
+    location / {
+        root /var/www/trading-system/frontend;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API requests  
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Important for webhooks
+        proxy_buffering off;
+        proxy_request_buffering off;
+        client_max_body_size 10M;
+    }
+
+    # Static files
+    location /static {
+        alias /var/www/trading-system/frontend;
+    }
+}
+```
+
+### 2.2 Test and Reload Nginx:
+```bash
+# Test configuration
+sudo nginx -t
+
+# If test passes, reload
+sudo systemctl reload nginx
+```
+
+## Step 3: Test Subdomain Access
+
+Once DNS propagates, test:
+
+```bash
+# From your local machine
+curl http://trading.theinvestmaster.in/api/account/status
+
+# Or open in browser
+# http://trading.theinvestmaster.in
+```
+
+## Step 4: Setup SSL Certificate for Subdomain
+
+Once the subdomain is working on HTTP:
+
+```bash
+# Get SSL certificate for subdomain
+sudo certbot --nginx -d trading.theinvestmaster.in
+
+# Follow the prompts:
+# - Enter your email
+# - Agree to terms
+# - Choose to redirect HTTP to HTTPS (recommended)
+```
+
+## Step 5: Configure TradingView Webhook
+
+In your TradingView alerts, use this webhook URL:
+
+```
+https://trading.theinvestmaster.in/api/webhook?token=your_webhook_secret
+```
+
+## Step 6: Update Your Application Configuration (Optional)
+
+If your frontend has any hardcoded URLs, update them:
+
+```javascript
+// In your frontend JavaScript
+const API_URL = 'https://trading.theinvestmaster.in/api';
+```
+
+## Testing Your Subdomain Setup
+
+### 1. DNS Check:
+```bash
+# Check if DNS is resolved
+nslookup trading.theinvestmaster.in
+dig trading.theinvestmaster.in
+
+# Should return your Elastic IP
+```
+
+### 2. HTTP Test:
+```bash
+# Test HTTP access
+curl -I http://trading.theinvestmaster.in
+```
+
+### 3. API Test:
+```bash
+# Test API endpoint
+curl http://trading.theinvestmaster.in/api/account/status
+```
+
+### 4. HTTPS Test (after SSL setup):
+```bash
+# Test HTTPS
+curl https://trading.theinvestmaster.in/api/account/status
+```
+
+### 5. Webhook Test:
+```bash
+# Test webhook endpoint
+curl -X POST "https://trading.theinvestmaster.in/api/webhook?token=your_webhook_secret" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"buy","symbol":"BTCUSDT","quantity":0.001,"leverage":5}'
+```
+
+## Quick Setup Commands Summary
+
+```bash
+# 1. Update Nginx config
+sudo nano /etc/nginx/sites-available/trading-system
+# (paste the configuration above)
+
+# 2. Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
+
+# 3. Wait for DNS propagation (5-30 minutes)
+
+# 4. Get SSL certificate
+sudo certbot --nginx -d trading.theinvestmaster.in
+
+# 5. Test everything
+curl https://trading.theinvestmaster.in/api/account/status
+```
+
+## Troubleshooting
+
+### DNS Not Resolving:
+- Double-check GoDaddy DNS settings
+- Ensure you used just "trading" in the Name field, not full domain
+- Wait longer for propagation
+- Try clearing DNS cache: `ipconfig /flushdns` (Windows) or `sudo dscacheutil -flushcache` (Mac)
+
+### 404 Errors:
+- Check Nginx server_name matches exactly: `trading.theinvestmaster.in`
+- Verify files are in correct directory: `/var/www/trading-system/`
+- Check Nginx error logs: `sudo tail -f /var/log/nginx/error.log`
+
+### SSL Certificate Issues:
+- Ensure DNS is fully propagated before running certbot
+- Make sure port 80 is accessible for domain validation
+- Check certbot logs: `sudo journalctl -u certbot`
+
+## Benefits of Using Subdomain
+
+1. **Isolation**: Main site remains unaffected
+2. **Organization**: Clear separation of services  
+3. **SSL**: Separate certificate for trading system
+4. **Flexibility**: Can host on different servers if needed
+5. **Professional**: Clean URL structure
+
+Your trading system will be accessible at:
+- **Dashboard**: https://trading.theinvestmaster.in
+- **API**: https://trading.theinvestmaster.in/api
+- **Webhook**: https://trading.theinvestmaster.in/api/webhook?token=your_secret
