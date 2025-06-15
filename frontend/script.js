@@ -194,6 +194,8 @@ function updatePositionsTable(positions) {
     positionsBody.innerHTML = rows;
 }
 
+
+
 async function loadTradeHistory() {
     try {
         const response = await fetchWithAuth(`${API_URL}/trades?limit=50`);
@@ -210,9 +212,24 @@ async function loadTradeHistory() {
             const statusClass = trade.status === 'filled' ? 'profit' : 
                               trade.status === 'cancelled' ? 'loss' : '';
             
+            // Parse as UTC explicitly by adding 'Z' to indicate UTC
+            const utcDate = new Date(trade.created_at + 'Z');
+            
+            // Now convert to IST string
+            const istString = utcDate.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            
             return `
                 <tr>
-                    <td>${new Date(trade.created_at).toLocaleString()}</td>
+                    <td>${istString} IST</td>
                     <td>${trade.symbol}</td>
                     <td>${trade.side}</td>
                     <td>${trade.quantity}</td>
@@ -229,6 +246,13 @@ async function loadTradeHistory() {
         historyBody.innerHTML = '<tr><td colspan="7" class="empty-message">Error loading trade history</td></tr>';
     }
 }
+
+
+
+
+
+
+
 
 // Show close modal function
 function showCloseModal(symbol, side, size) {
@@ -318,3 +342,4 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+

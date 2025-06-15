@@ -1,4 +1,4 @@
-from models import WebhookSignal, Trade
+from models import WebhookSignal, Trade, Settings
 from bybit_client import bybit_client
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
@@ -7,6 +7,7 @@ from typing import Dict, Any
 import hashlib
 import hmac
 from config import config
+import time
 
 class WebhookHandler:
     def __init__(self):
@@ -25,12 +26,40 @@ class WebhookHandler:
                            auto_trading_enabled: bool) -> Dict[str, Any]:
         """Process incoming webhook signal"""
         
+        # Calculate position size if not provided
+        position_size = signal.quantity
+        if not position_size:
+            account_info = self.client.get_account_info()
+            if account_info["success"]:
+                # Get settings from database
+                settings = await db.get(Settings, 1)
+                risk_percentage = settings.risk_percentage if settings else 1.0
+                
+                # Calculate position size based on risk percentage
+                balance = account_info["balance"]
+                position_size = (balance * risk_percentage / 100)
+                
+                # If leverage is provided, we can use more capital
+                if signal.leverage and signal.leverage > 1:
+                    # This is the notional value we want to trade
+                    # The actual margin required will be position_size / leverage
+                    position_size = position_size * signal.leverage
+            else:
+                position_size = config.DEFAULT_POSITION_SIZE
+        
+        # For USDT pairs, we need to calculate the quantity in base currency
+        # For example, for SOLUSDT at price 150, with $150 position, we need 1 SOL
+        if signal.symbol.endswith("USDT") and signal.price:
+            quantity_in_base = position_size / signal.price
+        else:
+            quantity_in_base = position_size
+        
         # Create trade record
         trade = Trade(
             symbol=signal.symbol,
             side=signal.action.upper(),
-            quantity=signal.quantity or config.DEFAULT_POSITION_SIZE,
-            leverage=signal.leverage,  # Add leverage
+            quantity=quantity_in_base,  # Store the adjusted quantity
+            leverage=signal.leverage,
             stop_loss=signal.stop_loss,
             take_profit=signal.take_profit,
             status="pending",
@@ -62,34 +91,26 @@ class WebhookHandler:
                 "trade_id": trade.id
             }
         
-        # Calculate position size based on risk if not provided
-        if not signal.quantity:
-            account_info = self.client.get_account_info()
-            if account_info["success"]:
-                # Use 1% of balance as default
-                trade.quantity = account_info["balance"] * 0.01
-            else:
-                trade.quantity = config.DEFAULT_POSITION_SIZE
-        
         # Place the order
         order_result = self.client.place_order(
             symbol=signal.symbol,
             side=signal.action,
-            qty=trade.quantity,
-            leverage=signal.leverage,  # Pass leverage
+            qty=trade.quantity,  # Use the calculated quantity
+            leverage=signal.leverage,
             stop_loss=signal.stop_loss,
             take_profit=signal.take_profit
         )
-    
+        
         if order_result["success"]:
             trade.trade_id = order_result["order_id"]
             trade.status = "filled"
             trade.reason = "Order placed successfully"
+            # Update quantity to the actual adjusted quantity
+            trade.quantity = order_result.get("adjusted_qty", trade.quantity)
             
             # Fetch the entry price from the position
             try:
                 # Small delay to ensure position is created
-                import time
                 time.sleep(0.5)
                 
                 position_result = self.client.session.get_positions(
@@ -117,7 +138,8 @@ class WebhookHandler:
             "success": order_result["success"],
             "message": trade.reason,
             "trade_id": trade.id,
-            "order_id": trade.trade_id if order_result["success"] else None
+            "order_id": trade.trade_id if order_result["success"] else None,
+            "adjusted_quantity": order_result.get("adjusted_qty") if order_result["success"] else None
         }
     
     async def update_trade_status(self, trade_id: str, db: AsyncSession):

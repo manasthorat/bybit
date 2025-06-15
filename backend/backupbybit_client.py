@@ -143,12 +143,19 @@ class BybitClient:
             if result["retCode"] == 0:
                 account_data = result["result"]["list"][0]
                 total_equity = float(account_data.get("totalEquity") or 0)
-                total_balance = float(account_data.get("totalWalletBalance") or 0)
-                available_balance = float(account_data.get("totalAvailableBalance") or total_balance)
+                available_balance = float(account_data.get("totalAvailableBalance") or 0)
+                
+                # Get USDT balance specifically
+                coins = account_data.get("coin", [])
+                usdt_balance = 0
+                for coin in coins:
+                    if coin["coin"] == "USDT":
+                        usdt_balance = float(coin.get("walletBalance", 0))
+                        break
                 
                 return {
                     "success": True,
-                    "balance": total_balance,
+                    "balance": usdt_balance,
                     "equity": total_equity,
                     "available_balance": available_balance
                 }
